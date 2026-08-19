@@ -87,42 +87,8 @@ jobs:
               if: ${{ !env.ACT }}
               uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1
               with:
-                username: ${{ vars.DOCKERHUB_USERNAME }}
+                username: ${{ secrets.DOCKERHUB_USERNAME }}
                 password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-            - name: Ensure Docker Hub repository exists
-              if: ${{ !env.ACT }}
-              env:
-                DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
-                DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-              run: |
-                set -euo pipefail
-
-                REPO_LINE=$(grep '^  IMAGE_REPO:' "${{ matrix.service }}/Taskfile.yaml" | head -n1)
-                IMAGE_REPO="${REPO_LINE#*IMAGE_REPO: }"
-                NAMESPACE="${IMAGE_REPO%/*}"
-                REPO_NAME="${IMAGE_REPO##*/}"
-
-                echo "Ensuring the Docker Hub repository exists: ${IMAGE_REPO}"
-
-                HTTP_CODE=$(curl -sS -o /tmp/dockerhub_repo.json -w '%{http_code}' \
-                  -H "Authorization: Bearer ${DOCKERHUB_TOKEN}" \
-                  "https://hub.docker.com/v2/repositories/${NAMESPACE}/${REPO_NAME}/")
-
-                if [[ "$HTTP_CODE" == "404" ]]; then
-                  echo "Repository not found; creating it..."
-                  curl -fsSL -X POST \
-                    -H "Authorization: Bearer ${DOCKERHUB_TOKEN}" \
-                    -H "Content-Type: application/json" \
-                    -d "{\"name\":\"${REPO_NAME}\",\"namespace\":\"${NAMESPACE}\"}" \
-                    "https://hub.docker.com/v2/repositories/${NAMESPACE}/"
-                elif [[ "$HTTP_CODE" == "200" ]]; then
-                  echo "Repository already exists."
-                else
-                  echo "Docker Hub API returned ${HTTP_CODE}"
-                  cat /tmp/dockerhub_repo.json
-                  exit 1
-                fi
 
             - name: Set up QEMU
               uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 #v3.6.0
