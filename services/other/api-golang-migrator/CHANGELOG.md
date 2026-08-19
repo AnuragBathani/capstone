@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.4.0](https://github.com/AnuragBathani/capstone/compare/services/other/api-golang-migrator@1.3.1...services/other/api-golang-migrator@1.4.0) (2026-08-19)
+
+
+### Features
+
+* add dependency install step ([#29](https://github.com/AnuragBathani/capstone/issues/29)) ([3b00056](https://github.com/AnuragBathani/capstone/commit/3b000563250035722c38060cc1cc0a10d3716f57))
+* add example tests ([3bcbbd8](https://github.com/AnuragBathani/capstone/commit/3bcbbd8bf4bf4ebb9b982641bbc6dfc24decade8))
+
+
+### Chores
+
+* release main ([#27](https://github.com/AnuragBathani/capstone/issues/27)) ([03af08f](https://github.com/AnuragBathani/capstone/commit/03af08feb978ccac97e367ef47a3f9eda171d077))
+* release main ([#28](https://github.com/AnuragBathani/capstone/issues/28)) ([31f0ddb](https://github.com/AnuragBathani/capstone/commit/31f0ddb598901cca0d5fd99672c156647f6fbcfe))
+* release main ([#40](https://github.com/AnuragBathani/capstone/issues/40)) ([26dda0c](https://github.com/AnuragBathani/capstone/commit/26dda0c5b824ee7ab3bcd88f16b65e611d720f5a))
+* trigger release please with empty commit ([d004a8c](https://github.com/AnuragBathani/capstone/commit/d004a8c701dc895ac04e4e3755ed5d6824850279))
+* trigger release please with empty commit ([2e6f3d8](https://github.com/AnuragBathani/capstone/commit/2e6f3d896992ae2a505a8872ba22405208f7aaa2))
+* trigger release please with empty commit ([ad0b36e](https://github.com/AnuragBathani/capstone/commit/ad0b36e33bcccbb3cd408a2bcda691b74cb1aac5))
+* trigger release please with empty commit ([48709c0](https://github.com/AnuragBathani/capstone/commit/48709c04181d3c2ad8c7b1845675607410220a2d))
+* trigger release please with empty commit ([f6afe9c](https://github.com/AnuragBathani/capstone/commit/f6afe9c43292e4f5ba49000ee53cf88de020f1b9))
+* trigger release please with empty commit ([e2dbd18](https://github.com/AnuragBathani/capstone/commit/e2dbd1849c2f29eece427c428300137903bd6325))
+* trigger release please with empty commit ([960f65d](https://github.com/AnuragBathani/capstone/commit/960f65ddbed222e7bcb88fbbb07c7cd017fad739))
+* trigger release please with empty commit ([30514f4](https://github.com/AnuragBathani/capstone/commit/30514f4ef14280c9973c48821db61fbaaa5d8548))
+
 ## [1.3.1](https://github.com/sidpalas/capstone/compare/services/other/api-golang-migrator@1.3.0...services/other/api-golang-migrator@1.3.1) (2025-09-17)
 
 
