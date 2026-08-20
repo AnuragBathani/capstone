@@ -132,7 +132,7 @@ jobs:
             - name: Trigger Depoy
               if: ${{ !env.ACT }}
               env:
-                ACCESS_TOKEN: ${{ secrets.GHA_CAPSTONE_PERSONAL_ACCESS_TOKEN }}
+                GH_TOKEN: ${{ secrets.GHA_CAPSTONE_PERSONAL_ACCESS_TOKEN }}
               run: |
                     gh workflow run .github/workflows/update-gitops-manifests.yaml \
                         -f service=${{ matrix.service }} \
