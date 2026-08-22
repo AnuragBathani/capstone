@@ -1,0 +1,35 @@
+status: active
+owner: platform-security
+last_updated: 2026-08-22
+
+block_on_severity: high
+
+checks:
+  sast:
+    enabled: false
+    enforcement: off
+  secret_scan:
+    enabled: false
+    enforcement: off
+  dependency_scan:
+    enabled: false
+    enforcement: off
+  container_scan:
+    enabled: false
+    enforcement: off
+  dast:
+    enabled: false
+    enforcement: off
+
+branch_protection:
+  required_checks:
+    - Run Tests
+    - Security Baseline
+  note: "Configure these in GitHub branch protection rules."
+
+rollout:
+  objective: "Establish baseline security policy and workflow guardrails without changing deployment behavior"
+  freeze_current_deploy_flow: true
+  notes:
+    - "No change to build-push or update-gitops-manifests execution path during the baseline rollout"
+    - "All scanner jobs are introduced in the next security rollout step with an explicit policy flip"

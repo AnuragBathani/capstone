@@ -60,6 +60,14 @@ This repository contains the capstone project for the [DevOps Directive GitHub A
 
     Nightly cron (0 0 * * *) + manual trigger, using actions/stale to label/close inactive issues and PRs.  ￼
 
+7. **Security Baseline** – .github/workflows/security-baseline.yaml
+
+    Runs on pull_request, push to main, and manual trigger. It validates the security policy contract in `.github/security/security-gates.yaml` and confirms non-breaking rollout mode before scanners are enabled.
+
+8. **Secret Scan** – .github/workflows/secret-scan.yaml
+
+    Runs on pull_request, push to main, and manual trigger. It scans the repository with Gitleaks and uploads the report as an artifact.
+
 ### How the Pieces Fit Together
 1.	PR or push to main → Run Tests.
 2.	If main changes or a tag is pushed → Build & Push Container Images builds and publishes images, then triggers…
@@ -67,6 +75,18 @@ This repository contains the capstone project for the [DevOps Directive GitHub A
 4.	Release Please automates versioning/changelogs across all services.
 5.	Export Timing Data collects performance telemetry for the above workflows.
 6.	Close Stale Issues and PRs keeps the project tidy.
+
+---
+
+## Security Baseline
+
+The initial security rollout baseline is now in place with governance-only checks:
+
+- Policy source of truth: `.github/security/security-gates.yaml`
+- Baseline workflow: `.github/workflows/security-baseline.yaml`
+- Program notes: `.github/security/README.md`
+
+This baseline intentionally does not change image build/push or deployment behavior. Scanner enforcement (SAST, secret, dependency, container, DAST) is enabled in the next security rollout step.
 
 ---
 
