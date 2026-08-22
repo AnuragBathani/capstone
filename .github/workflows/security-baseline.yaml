@@ -1,0 +1,62 @@
+name: Security Baseline
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    paths:
+      - services/**
+      - .github/security/**
+      - .github/workflows/security-baseline.yaml
+  workflow_dispatch:
+
+jobs:
+  validate-policy:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Validate policy file exists
+        shell: bash
+        run: |
+          test -f .github/security/security-gates.yaml
+
+      - name: Validate required policy keys
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=.github/security/security-gates.yaml
+          required_keys=(status owner block_on_severity checks branch_protection rollout)
+
+          for key in "${required_keys[@]}"; do
+            if ! grep -q "^${key}:" "$FILE"; then
+              echo "Missing required key: ${key}"
+              exit 1
+            fi
+          done
+
+      - name: Assert non-breaking mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE=.github/security/security-gates.yaml
+
+          grep -q "^  freeze_current_deploy_flow: true" "$FILE"
+
+      - name: Publish baseline summary
+        shell: bash
+        run: |
+          {
+            echo "## Security Baseline"
+            echo ""
+            echo "- Policy file present and validated"
+            echo "- Non-breaking mode confirmed"
+            echo "- Current deploy behavior remains unchanged"
+            echo ""
+            echo "Next: enable scanners in the next security rollout step by flipping policy and adding scan jobs"
+          } >> "$GITHUB_STEP_SUMMARY"
