@@ -40,10 +40,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # go.mod pins go 1.19, which CodeQL autobuild no longer handles cleanly.
-          # build-mode: none analyses the source directly and sidesteps the toolchain.
+          # Go has NO `none` build mode -- CodeQL rejects it outright and requires
+          # autobuild or manual. autobuild compiles services/go/api-golang with the
+          # runner's Go toolchain, which builds the `go 1.19` module fine since Go
+          # is backward compatible.
           - language: go
-            build-mode: none
+            build-mode: autobuild
+          # Interpreted languages do support `none`: CodeQL reads the source directly,
+          # so there is nothing to build and no toolchain to set up.
           - language: javascript-typescript
             build-mode: none
           - language: python
@@ -52,6 +56,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      # CodeQL's Go autobuilder builds with whatever toolchain is on PATH. Pin it so the
+      # analysis does not drift with the runner image. "stable" compiles this module
+      # fine -- Go is backward compatible and go.mod's own `go 1.19` directive is
+      # untouched. Must run BEFORE init, which is where autobuild is configured.
+      - name: Set up Go
+        if: ${{ matrix.language == 'go' }}
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: "stable"
+          cache-dependency-path: services/go/api-golang/go.sum
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
