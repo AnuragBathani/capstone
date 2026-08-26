@@ -1,35 +1,75 @@
 status: active
 owner: platform-security
-last_updated: 2026-08-22
+last_updated: 2026-08-24
 
+# Severity floor at which an enforcing check fails the build.
+# This is a floor, not an exact match: "high" also blocks on "critical".
+# One of: low | medium | high | critical
 block_on_severity: high
 
+# Source of truth for scanner enablement. Every security workflow reads this
+# file at runtime via .github/actions/security-policy and honours the result,
+# so turning a gate on/off or from warn to block is a one-line edit here --
+# no workflow changes required.
+#
+#   enabled:     false skips the scan entirely
+#   enforcement: "off"  -> scan does not run
+#                "warn" -> scan runs and reports, never fails the job
+#                "block"-> scan fails the job at or above block_on_severity
+#
+# NOTE: enforcement values are quoted deliberately. YAML 1.1 parses a bare `off`
+# as the boolean false, which would silently break policy resolution.
 checks:
   sast:
-    enabled: false
-    enforcement: off
+    enabled: true
+    enforcement: "warn"
+    tool: CodeQL
+    workflow: .github/workflows/sast.yaml
   secret_scan:
-    enabled: false
-    enforcement: off
+    enabled: true
+    enforcement: "warn"
+    tool: Gitleaks
+    workflow: .github/workflows/secret-scan.yaml
   dependency_scan:
-    enabled: false
-    enforcement: off
+    enabled: true
+    enforcement: "warn"
+    tool: Trivy (fs) + govulncheck
+    workflow: .github/workflows/dependency-scan.yaml
   container_scan:
-    enabled: false
-    enforcement: off
+    enabled: true
+    enforcement: "warn"
+    tool: Trivy (image)
+    workflow: .github/workflows/build-push.yaml
+  iac_scan:
+    enabled: true
+    enforcement: "warn"
+    tool: Trivy (config)
+    workflow: .github/workflows/iac-scan.yaml
   dast:
     enabled: false
-    enforcement: off
+    enforcement: "off"
+    tool: "not yet selected"
+    workflow: "not yet implemented"
 
 branch_protection:
   required_checks:
     - Run Tests
     - Security Baseline
+    - SAST
+    - Dependency Scan
+    - IaC Scan
+    - Secret Scan
   note: "Configure these in GitHub branch protection rules."
 
 rollout:
-  objective: "Establish baseline security policy and workflow guardrails without changing deployment behavior"
-  freeze_current_deploy_flow: true
+  objective: "Report SAST, secret, dependency, container, and IaC findings at HIGH+ without blocking delivery"
+  freeze_current_deploy_flow: false
+  exceptions:
+    file: .trivyignore
+    note: "Every entry requires a CVE id, a justification, and an expiry date. Review at each release."
   notes:
-    - "No change to build-push or update-gitops-manifests execution path during the baseline rollout"
-    - "All scanner jobs are introduced in the next security rollout step with an explicit policy flip"
+    - "All checks run in warn mode: findings are reported to the job summary and Code Scanning, but never fail a job"
+    - "build-push still scans the image before pushing; in warn mode the push proceeds regardless of findings"
+    - "Raise a check to enforcement: \"block\" here to start gating on it -- no workflow changes needed"
+    - "DAST remains out of scope; it needs an ephemeral environment to test against"
+    - "Deferred hardening: workflow shell-injection fixes, deploy PAT scope reduction, SHA-pinning of all actions"

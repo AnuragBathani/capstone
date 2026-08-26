@@ -68,6 +68,7 @@ jobs:
         permissions:
             actions: write
             contents: read
+            security-events: write
         strategy:
           fail-fast: false
           matrix:
@@ -82,6 +83,12 @@ jobs:
 
             - name: Set up Task
               uses: ./.github/actions/setup-dependencies
+
+            - name: Read security policy
+              id: policy
+              uses: ./.github/actions/security-policy
+              with:
+                check: container_scan
 
             - name: Login to Docker Hub
               if: ${{ !env.ACT }}
@@ -119,15 +126,87 @@ jobs:
                 echo "version=${version}" 
                 echo "image_tag=${image_tag}"
 
-            - name: Build and Push Container Image
+            # The image is built and loaded locally FIRST so it can be scanned before it
+            # ever reaches Docker Hub. Pushing first and scanning after would mean a
+            # vulnerable image is already public by the time the finding lands.
+            # load: true is safe here because this build is single-platform.
+            - name: Build Container Image (local, not pushed)
               uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 #v6.18.0
               with:
                 context: ${{ matrix.service }}
-                push: ${{ !env.ACT }}
+                push: false
+                load: true
                 tags: ${{ steps.image-tag.outputs.image_tag }}
                 platforms: linux/amd64
                 cache-from: type=gha
                 cache-to: type=gha,mode=max
+
+            - name: Scan Image with Trivy (report)
+              if: ${{ steps.policy.outputs.enabled == 'true' }}
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                # Under act there is no valid github.token, so setup-trivy's internal
+                # actions/checkout of aquasecurity/trivy cannot authenticate. Locally we
+                # use the trivy already baked into the runner image; on GitHub this is 'false'.
+                skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+                scan-type: image
+                image-ref: ${{ steps.image-tag.outputs.image_tag }}
+                format: sarif
+                output: trivy-image.sarif
+                severity: ${{ steps.policy.outputs.severity }}
+                ignore-unfixed: true
+                trivyignores: .trivyignore
+                exit-code: "0"
+
+            - name: Upload SARIF to Code Scanning
+              if: ${{ steps.policy.outputs.enabled == 'true' && !env.ACT }}
+              uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+              with:
+                sarif_file: trivy-image.sarif
+                category: trivy-image-${{ matrix.service }}
+
+            # The gate. Non-zero exit here stops the push step below from running.
+            - name: Scan Image with Trivy (gate)
+              if: ${{ steps.policy.outputs.enabled == 'true' }}
+              uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+              with:
+                # Under act there is no valid github.token, so setup-trivy's internal
+                # actions/checkout of aquasecurity/trivy cannot authenticate. Locally we
+                # use the trivy already baked into the runner image; on GitHub this is 'false'.
+                skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+                scan-type: image
+                image-ref: ${{ steps.image-tag.outputs.image_tag }}
+                format: table
+                severity: ${{ steps.policy.outputs.severity }}
+                ignore-unfixed: true
+                trivyignores: .trivyignore
+                exit-code: ${{ steps.policy.outputs.exit_code }}
+
+            - name: Push Container Image
+              if: ${{ !env.ACT }}
+              env:
+                IMAGE_TAG: ${{ steps.image-tag.outputs.image_tag }}
+              run: |
+                docker push "$IMAGE_TAG"
+
+            - name: Container scan summary
+              if: ${{ always() }}
+              env:
+                SERVICE: ${{ matrix.service }}
+                IMAGE_TAG: ${{ steps.image-tag.outputs.image_tag }}
+                ENABLED: ${{ steps.policy.outputs.enabled }}
+                ENFORCEMENT: ${{ steps.policy.outputs.enforcement }}
+                SEVERITY: ${{ steps.policy.outputs.severity }}
+              run: |
+                {
+                  echo "### Container Scan — ${SERVICE}"
+                  echo ""
+                  echo "- image: \`${IMAGE_TAG}\`"
+                  echo "- gate enabled: \`${ENABLED}\`"
+                  echo "- enforcement: \`${ENFORCEMENT}\` at \`${SEVERITY}\`"
+                  echo ""
+                  echo "Image is pushed only after the gate passes."
+                } >> "$GITHUB_STEP_SUMMARY"
 
             - name: Trigger Depoy
               if: ${{ !env.ACT }}

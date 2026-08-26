@@ -1,0 +1,86 @@
+name: "Security Policy"
+description: "Read .github/security/security-gates.yaml and emit the enforcement decision for a single check"
+
+inputs:
+  check:
+    description: "Which check to resolve: sast | secret_scan | dependency_scan | container_scan | dast"
+    required: true
+  policy-file:
+    description: "Path to the policy file, relative to the workspace root"
+    default: ".github/security/security-gates.yaml"
+
+outputs:
+  enabled:
+    description: "true if this check is enabled in policy"
+    value: ${{ steps.resolve.outputs.enabled }}
+  enforcement:
+    description: "off | warn | block"
+    value: ${{ steps.resolve.outputs.enforcement }}
+  severity:
+    description: "Trivy-style severity list derived from block_on_severity (e.g. HIGH,CRITICAL)"
+    value: ${{ steps.resolve.outputs.severity }}
+  exit_code:
+    description: "1 when enforcement is block (scanner should fail the job), otherwise 0"
+    value: ${{ steps.resolve.outputs.exit_code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve policy for ${{ inputs.check }}
+      id: resolve
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
+
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import os, sys, yaml
+
+        check = os.environ["INPUT_CHECK"]
+        path = os.environ["INPUT_POLICY_FILE"]
+
+        with open(path) as fh:
+            policy = yaml.safe_load(fh)
+
+        checks = policy.get("checks") or {}
+        if check not in checks:
+            sys.exit(f"::error::Unknown check '{check}' — not present in {path}")
+
+        entry = checks[check] or {}
+        enabled = bool(entry.get("enabled", False))
+
+        # YAML 1.1 parses a bare `off` as the boolean False (and `on` as True).
+        # The policy file quotes these values, but coerce defensively so an
+        # unquoted edit degrades to "off" rather than failing resolution.
+        raw = entry.get("enforcement", "off")
+        if raw is False:
+            raw = "off"
+        enforcement = str(raw).lower()
+
+        if enforcement not in ("off", "warn", "block"):
+            sys.exit(f"::error::checks.{check}.enforcement must be off|warn|block, got '{enforcement}'")
+
+        # block_on_severity is a floor: blocking on "high" also blocks on "critical".
+        ladder = ["low", "medium", "high", "critical"]
+        floor = str(policy.get("block_on_severity", "high")).lower()
+        if floor not in ladder:
+            sys.exit(f"::error::block_on_severity must be one of {ladder}, got '{floor}'")
+        severity = ",".join(s.upper() for s in ladder[ladder.index(floor):])
+
+        exit_code = "1" if enforcement == "block" else "0"
+
+        print(f"enabled={str(enabled).lower()}")
+        print(f"enforcement={enforcement}")
+        print(f"severity={severity}")
+        print(f"exit_code={exit_code}")
+
+        print(
+            f"::notice::policy[{check}] enabled={str(enabled).lower()} "
+            f"enforcement={enforcement} severity={severity}",
+            file=sys.stderr,
+        )
+        PY
+      env:
+        INPUT_CHECK: ${{ inputs.check }}
+        INPUT_POLICY_FILE: ${{ inputs.policy-file }}

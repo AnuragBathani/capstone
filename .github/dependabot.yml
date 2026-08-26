@@ -1,0 +1,59 @@
+version: 2
+
+# Scanners report; Dependabot is the half that actually fixes. It also pins the
+# few actions still referenced by mutable tag (dorny/paths-filter, gitleaks-action,
+# setup-buildx-action) as it raises PRs against them.
+updates:
+  - package-ecosystem: gomod
+    directory: /services/go/api-golang
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /services/node/api-node
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: npm
+    directory: /services/react/client-react
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: pip
+    directory: /services/python/load-generator-python
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  # Base images are the largest source of container-scan findings in this repo.
+  - package-ecosystem: docker
+    directories:
+      - /services/go/api-golang
+      - /services/node/api-node
+      - /services/react/client-react
+      - /services/python/load-generator-python
+      - /services/other/api-golang-migrator
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"

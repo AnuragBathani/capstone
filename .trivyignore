@@ -1,0 +1,21 @@
+# Trivy exception list
+#
+# Enforcement blocks on HIGH and CRITICAL findings that have a fix available
+# (every scan runs with --ignore-unfixed). This file is the pressure valve for
+# findings that are genuinely accepted -- not a dumping ground for noise.
+#
+# Every entry MUST carry, on the lines above it:
+#   - who accepted it
+#   - why it is not exploitable here, or what compensating control applies
+#   - an expiry date (review at the next release; delete the entry when it passes)
+#
+# Format:
+#   CVE-2024-12345 exp:2026-12-31
+#
+# Example:
+#   # Accepted by @platform-security 2026-08-24
+#   # Reachable only via the CLI parser, which this service never invokes.
+#   # Re-evaluate when the base image is bumped.
+#   CVE-2024-12345 exp:2026-11-30
+#
+# An empty file means nothing is currently excepted. Keep it that way where possible.
