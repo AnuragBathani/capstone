@@ -8,11 +8,16 @@ on:
     paths:
       - services/**
       - .github/security/**
+      - .github/actions/security-policy/**
       - .github/workflows/security-baseline.yaml
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   validate-policy:
+    name: Validate policy contract
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -26,37 +31,98 @@ jobs:
         run: |
           test -f .github/security/security-gates.yaml
 
-      - name: Validate required policy keys
+      # Validates the SHAPE of the policy, not a frozen state. The previous version
+      # asserted freeze_current_deploy_flow: true, which no longer holds now that
+      # build-push gates on a container scan -- a schema check keeps this workflow
+      # useful as the policy evolves instead of pinning it to one moment.
+      - name: Validate policy schema
         shell: bash
         run: |
           set -euo pipefail
-          FILE=.github/security/security-gates.yaml
-          required_keys=(status owner block_on_severity checks branch_protection rollout)
+          python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
 
-          for key in "${required_keys[@]}"; do
-            if ! grep -q "^${key}:" "$FILE"; then
-              echo "Missing required key: ${key}"
-              exit 1
-            fi
-          done
+          python3 - <<'PY'
+          import sys, yaml
 
-      - name: Assert non-breaking mode
+          PATH = ".github/security/security-gates.yaml"
+          policy = yaml.safe_load(open(PATH))
+          errors = []
+
+          for key in ("status", "owner", "block_on_severity", "checks", "branch_protection", "rollout"):
+              if key not in policy:
+                  errors.append(f"missing required top-level key: {key}")
+
+          severities = ("low", "medium", "high", "critical")
+          floor = str(policy.get("block_on_severity", "")).lower()
+          if floor not in severities:
+              errors.append(f"block_on_severity must be one of {severities}, got '{floor}'")
+
+          checks = policy.get("checks") or {}
+          if not checks:
+              errors.append("checks must contain at least one entry")
+
+          for name, entry in checks.items():
+              entry = entry or {}
+              if "enabled" not in entry:
+                  errors.append(f"checks.{name} missing 'enabled'")
+              elif not isinstance(entry["enabled"], bool):
+                  errors.append(f"checks.{name}.enabled must be a boolean")
+
+              # YAML 1.1 turns a bare `off` into the boolean False; coerce it back
+              # so an unquoted value reads as "off" instead of a spurious error.
+              raw = entry.get("enforcement", "")
+              if raw is False:
+                  raw = "off"
+              enforcement = str(raw).lower()
+              if enforcement not in ("off", "warn", "block"):
+                  errors.append(f"checks.{name}.enforcement must be off|warn|block, got '{enforcement}'")
+
+              # An enabled check that never blocks is a decorative gate. Allowed, but
+              # an enforcing check that is switched off is contradictory.
+              if enforcement == "block" and not entry.get("enabled", False):
+                  errors.append(f"checks.{name} is enforcement:block but enabled:false")
+
+          if not (policy.get("branch_protection") or {}).get("required_checks"):
+              errors.append("branch_protection.required_checks must be a non-empty list")
+
+          for e in errors:
+              print(f"::error file={PATH}::{e}")
+
+          if errors:
+              sys.exit(f"{len(errors)} policy validation error(s)")
+          print(f"policy OK: {len(checks)} checks defined, blocking at {floor}+")
+          PY
+
+      - name: Publish policy dashboard
+        if: ${{ always() }}
         shell: bash
         run: |
           set -euo pipefail
-          FILE=.github/security/security-gates.yaml
+          python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
 
-          grep -q "^  freeze_current_deploy_flow: true" "$FILE"
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import yaml
 
-      - name: Publish baseline summary
-        shell: bash
-        run: |
-          {
-            echo "## Security Baseline"
-            echo ""
-            echo "- Policy file present and validated"
-            echo "- Non-breaking mode confirmed"
-            echo "- Current deploy behavior remains unchanged"
-            echo ""
-            echo "Next: enable scanners in the next security rollout step by flipping policy and adding scan jobs"
-          } >> "$GITHUB_STEP_SUMMARY"
+          policy = yaml.safe_load(open(".github/security/security-gates.yaml"))
+          checks = policy.get("checks") or {}
+          floor = str(policy.get("block_on_severity", "?")).lower()
+
+          print("## Security Baseline\n")
+          print(f"Policy source: `.github/security/security-gates.yaml` — blocking at **{floor}+**\n")
+          print("| Check | Enabled | Enforcement | Tool |")
+          print("|---|---|---|---|")
+          for name, entry in sorted(checks.items()):
+              entry = entry or {}
+              enabled = "✅" if entry.get("enabled") else "—"
+              raw = entry.get("enforcement", "off")
+              enforcement = "off" if raw is False else str(raw)
+              badge = {"block": "🛑 block", "warn": "⚠️ warn", "off": "off"}.get(enforcement, enforcement)
+              print(f"| `{name}` | {enabled} | {badge} | {entry.get('tool', '—')} |")
+
+          required = (policy.get("branch_protection") or {}).get("required_checks") or []
+          print("\n**Required status checks:** " + ", ".join(f"`{c}`" for c in required))
+
+          exceptions = (policy.get("rollout") or {}).get("exceptions") or {}
+          if exceptions.get("file"):
+              print(f"\n**Exceptions:** `{exceptions['file']}` — {exceptions.get('note', '')}")
+          PY

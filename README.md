@@ -52,41 +52,82 @@ This repository contains the capstone project for the [DevOps Directive GitHub A
 
     Runs on push to main and manually. Uses googleapis/release-please-action with a PAT to open PRs and tag releases across multiple packages defined in .github/utils/release-please-config.json and .github/utils/.release-please-manifest.json.  ￼
 
-5. **Export GitHub Action Timing Data** – .github/workflows/export-timing-data.yaml
-
-    Triggered by workflow_run (after Build and Push, Run Tests, or Release Please complete). It exports OpenTelemetry traces to Honeycomb using inception-health/otel-export-trace-action.  ￼
-
-6. **Close Stale Issues and PRs** – .github/workflows/close-stale-issues-and-prs.yaml
+5. **Close Stale Issues and PRs** – .github/workflows/close-stale-issues-and-prs.yaml
 
     Nightly cron (0 0 * * *) + manual trigger, using actions/stale to label/close inactive issues and PRs.  ￼
 
-7. **Security Baseline** – .github/workflows/security-baseline.yaml
+6. **Security Baseline** – .github/workflows/security-baseline.yaml
 
-    Runs on pull_request, push to main, and manual trigger. It validates the security policy contract in `.github/security/security-gates.yaml` and confirms non-breaking rollout mode before scanners are enabled.
+    Runs on pull_request, push to main, and manual trigger. It validates the *schema* of `.github/security/security-gates.yaml` (required keys, valid enforcement values, no contradictory `block` + `disabled` entries) and publishes a live enable/enforce dashboard to the job summary.
 
-8. **Secret Scan** – .github/workflows/secret-scan.yaml
+7. **Secret Scan** – .github/workflows/secret-scan.yaml
 
-    Runs on pull_request, push to main, and manual trigger. It scans the repository with Gitleaks and uploads the report as an artifact.
+    Runs on pull_request, push to main, and manual trigger. Scans the repository with Gitleaks, gated by policy.
+
+8. **SAST** – .github/workflows/sast.yaml
+
+    CodeQL across Go, JavaScript/TypeScript, and Python with the `security-extended` query suite. Results publish to **Security → Code scanning**.
+
+9. **Dependency Scan** – .github/workflows/dependency-scan.yaml
+
+    Trivy filesystem scan across `go.sum`, both `package-lock.json` files, and `poetry.lock`, plus `govulncheck` for the Go service (reachability-aware, and catches stdlib vulnerabilities a lockfile scan cannot see). Paired with `.github/dependabot.yml` for automated remediation PRs.
+
+10. **IaC Scan** – .github/workflows/iac-scan.yaml
+
+    Trivy misconfiguration scanning over the Kubernetes manifests and all five Dockerfiles.
 
 ### How the Pieces Fit Together
 1.	PR or push to main → Run Tests.
 2.	If main changes or a tag is pushed → Build & Push Container Images builds and publishes images, then triggers…
 3.	Update GitOps Manifests to roll out the new tag to the chosen environment.
 4.	Release Please automates versioning/changelogs across all services.
-5.	Export Timing Data collects performance telemetry for the above workflows.
-6.	Close Stale Issues and PRs keeps the project tidy.
+5.	Close Stale Issues and PRs keeps the project tidy.
 
 ---
 
-## Security Baseline
+## Security
 
-The initial security rollout baseline is now in place with governance-only checks:
+Five scanner categories run on every PR in **warn mode** — they report HIGH and CRITICAL findings that have a fix available, but **do not block delivery**:
 
-- Policy source of truth: `.github/security/security-gates.yaml`
-- Baseline workflow: `.github/workflows/security-baseline.yaml`
-- Program notes: `.github/security/README.md`
+| Category | Tool | Gate |
+|---|---|---|
+| SAST | CodeQL (Go, JS/TS, Python) | `sast.yaml` |
+| Secret | Gitleaks | `secret-scan.yaml` |
+| Dependency / SCA | Trivy `fs` + govulncheck | `dependency-scan.yaml` |
+| IaC / misconfiguration | Trivy `config` | `iac-scan.yaml` |
+| Container image | Trivy `image` | inside `build-push.yaml`, **before** the push |
 
-This baseline intentionally does not change image build/push or deployment behavior. Scanner enforcement (SAST, secret, dependency, container, DAST) is enabled in the next security rollout step.
+### Policy as code
+
+`.github/security/security-gates.yaml` is the single source of truth. Every workflow
+reads it at runtime via the `.github/actions/security-policy` composite action and
+honours `enabled` / `enforcement` / `block_on_severity`. Moving a gate from `block` to
+`warn`, or disabling it, is a one-line edit to that file — no workflow changes.
+
+`Security Baseline` validates the policy's schema on every PR and renders the current
+enable/enforce matrix into the job summary.
+
+All checks are currently `enforcement: "warn"`: findings are surfaced in job summaries and
+**Security → Code scanning**, but no scanner fails a build. Flipping a check to `"block"`
+is a one-line edit to `security-gates.yaml`. Malfunctions still fail — an invalid policy
+file, or a manifest that will not parse — so a green pipeline cannot mean "the scan
+quietly did nothing".
+
+### Two things worth knowing
+
+- **The container scan runs before the push.** `build-push.yaml` builds with
+  `load: true, push: false` and scans the local image first, so findings are known before
+  anything is published. In warn mode the push still proceeds; set `container_scan` to
+  `enforcement: "block"` and the scan becomes a true gate that stops the push.
+
+- **kluctl templating breaks naive IaC scanning.** Four manifests aren't valid YAML
+  (`replicas: {{apiGolang.replicas}}`), so a scanner pointed at `deploy/` skips them
+  *silently* — including `api-golang`'s Deployment. `iac-scan.yaml` normalizes the
+  templating into a staging copy first and asserts everything parses before scanning.
+
+Accepted findings live in `.trivyignore` and require a justification and an expiry date.
+Full details, and the deferred hardening backlog, are in
+[`.github/security/README.md`](.github/security/README.md).
 
 ---
 
@@ -107,4 +148,30 @@ task: [trigger-workflow] act pull_request \
   --directory ../../.. \
   -W .github/workflows/test.yaml
 ```
+
+The security workflows have harnesses too: `.github/workflows/{sast,dependency-scan,iac-scan,secret-scan}`.
+
+### Docker 28+ workaround
+
+act copies its runner payload into `/var/run/act`, but `/var/run` is a symlink to `/run`
+in the `catthehacker` images, and Docker 28 refuses tar extraction through a symlink:
+
+```
+failed to copy content to container: Error response from daemon: mkdirat var/run: file exists
+```
+
+This is an act/Docker incompatibility, not a problem with the workflows. Build a runner
+image with a real `/var/run` and point act at it:
+
+```bash
+printf 'FROM catthehacker/ubuntu:act-22.04\nRUN rm -f /var/run && mkdir -p /var/run\n' > /tmp/Dockerfile
+DOCKER_BUILDKIT=0 docker build -t act-runner-patched:22.04 /tmp
+act workflow_dispatch -P ubuntu-24.04=act-runner-patched:22.04 --pull=false -W .github/workflows/iac-scan.yaml
+```
+
+### What does not run under act
+
+`CodeQL` analysis and every `upload-sarif` step are guarded by `if: ${{ !env.ACT }}` —
+they need GitHub-hosted infrastructure. Locally you get the policy resolution and the
+scanners; SARIF ingest only exercises on a real runner.
 

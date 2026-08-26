@@ -1,0 +1,132 @@
+name: Dependency Scan
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Resolve policy
+    runs-on: ubuntu-24.04
+    outputs:
+      enabled: ${{ steps.policy.outputs.enabled }}
+      enforcement: ${{ steps.policy.outputs.enforcement }}
+      severity: ${{ steps.policy.outputs.severity }}
+      exit_code: ${{ steps.policy.outputs.exit_code }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Read security policy
+        id: policy
+        uses: ./.github/actions/security-policy
+        with:
+          check: dependency_scan
+
+  trivy-fs:
+    name: Trivy (lockfiles)
+    runs-on: ubuntu-24.04
+    needs: policy
+    if: ${{ needs.policy.outputs.enabled == 'true' }}
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      # Picks up go.sum, both package-lock.json files, and poetry.lock in one pass.
+      # Reporting run: always exits 0 so the SARIF upload below is guaranteed to happen.
+      - name: Trivy filesystem scan (report)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          # Under act there is no valid github.token, so setup-trivy's internal
+          # actions/checkout of aquasecurity/trivy cannot authenticate. Locally we
+          # use the trivy already baked into the runner image; on GitHub this is 'false'.
+          skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,license
+          format: sarif
+          output: trivy-deps.sarif
+          severity: ${{ needs.policy.outputs.severity }}
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: "0"
+
+      - name: Upload SARIF to Code Scanning
+        if: ${{ !env.ACT }}
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: trivy-deps.sarif
+          category: trivy-dependencies
+
+      # Gating run: same scan, human-readable output, exit code driven by policy.
+      - name: Trivy filesystem scan (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          # Under act there is no valid github.token, so setup-trivy's internal
+          # actions/checkout of aquasecurity/trivy cannot authenticate. Locally we
+          # use the trivy already baked into the runner image; on GitHub this is 'false'.
+          skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          format: table
+          severity: ${{ needs.policy.outputs.severity }}
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: ${{ needs.policy.outputs.exit_code }}
+
+  govulncheck:
+    name: govulncheck (Go)
+    runs-on: ubuntu-24.04
+    needs: policy
+    if: ${{ needs.policy.outputs.enabled == 'true' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      # Reachability-aware: reports only vulnerabilities the code actually calls,
+      # and covers Go stdlib vulns that a lockfile scan cannot see.
+      #
+      # NOTE: analysed with a current toolchain because recent govulncheck no longer
+      # builds under the go 1.19 pinned in go.mod / the Dockerfile. Until that pin is
+      # raised, stdlib findings here understate what the shipped image actually carries.
+      #
+      # go-version-input is "stable", not a fixed minor: this action installs
+      # govulncheck@latest, whose module floor keeps moving (x/vuln v1.7.0 already
+      # requires go >= 1.25). Pinning a minor here breaks the moment that floor rises.
+      - name: Run govulncheck
+        id: govulncheck
+        continue-on-error: ${{ needs.policy.outputs.enforcement != 'block' }}
+        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          go-version-input: "stable"
+          work-dir: services/go/api-golang
+          go-package: ./...
+
+      - name: Summary
+        if: ${{ always() }}
+        shell: bash
+        env:
+          ENFORCEMENT: ${{ needs.policy.outputs.enforcement }}
+          OUTCOME: ${{ steps.govulncheck.outcome }}
+        run: |
+          {
+            echo "### Dependency Scan — govulncheck"
+            echo ""
+            echo "- enforcement: \`${ENFORCEMENT}\`"
+            echo "- result: \`${OUTCOME:-skipped}\`"
+            echo ""
+            echo "> Analysed with Go 1.24. \`services/go/api-golang/go.mod\` and the Dockerfile"
+            echo "> still pin Go 1.19 (EOL), so stdlib findings are understated until that is raised."
+          } >> "$GITHUB_STEP_SUMMARY"

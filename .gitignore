@@ -2,3 +2,13 @@
 
 **/.env
 **/.secrets
+
+# Build/editor artifacts. These were previously tracked (including a 16MB compiled
+# binary at services/go/api-golang/tmp/main) and every security scan has to walk them.
+**/tmp/
+*~
+*.un~
+
+# Scanner scratch space and reports
+.iac-scan-tmp/
+*.sarif

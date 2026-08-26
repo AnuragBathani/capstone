@@ -1,0 +1,173 @@
+name: IaC Scan
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    name: Resolve policy
+    runs-on: ubuntu-24.04
+    outputs:
+      enabled: ${{ steps.policy.outputs.enabled }}
+      enforcement: ${{ steps.policy.outputs.enforcement }}
+      severity: ${{ steps.policy.outputs.severity }}
+      exit_code: ${{ steps.policy.outputs.exit_code }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Read security policy
+        id: policy
+        uses: ./.github/actions/security-policy
+        with:
+          check: iac_scan
+
+  kubernetes:
+    name: Trivy (Kubernetes manifests)
+    runs-on: ubuntu-24.04
+    needs: policy
+    if: ${{ needs.policy.outputs.enabled == 'true' }}
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      # Four manifests are not valid YAML because kluctl templating sits where a value
+      # starts (e.g. `replicas: {{apiGolang.replicas}}`). A scanner pointed straight at
+      # deploy/ skips them SILENTLY -- including api-golang's Deployment. Substituting
+      # `1` keeps both `replicas:` and `image: repo:TAG` type-valid so all of them parse.
+      #
+      # Staged inside the workspace, not /tmp: trivy-action is a Docker action and only
+      # mounts $GITHUB_WORKSPACE.
+      - name: Normalize kluctl templating
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf .iac-scan-tmp
+          mkdir -p .iac-scan-tmp
+          cp -r deploy .iac-scan-tmp/
+
+          # Vendored upstream charts -- not our configuration to answer for.
+          rm -rf .iac-scan-tmp/deploy/kubernetes/kluctl/.helm-charts
+
+          find .iac-scan-tmp -name '*.yaml' -o -name '*.yml' | while read -r f; do
+            sed -i -E 's/\{\{[^}]*\}\}/1/g' "$f"
+          done
+
+          # GitHub-hosted runners ship PyYAML, but act images and self-hosted runners
+          # may not. Do not depend on undeclared runner state.
+          python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
+
+          python3 - <<'PY'
+          import glob, sys, yaml
+          bad = []
+          for f in glob.glob('.iac-scan-tmp/**/*.y*ml', recursive=True):
+              try:
+                  list(yaml.safe_load_all(open(f)))
+              except Exception as e:
+                  bad.append((f, str(e).splitlines()[0]))
+          total = len(glob.glob('.iac-scan-tmp/**/*.y*ml', recursive=True))
+          print(f"normalized {total} manifests, {len(bad)} still unparseable")
+          for f, e in bad:
+              print(f"::error file={f}::still unparseable after normalization: {e}")
+          sys.exit(1 if bad else 0)
+          PY
+
+      - name: Trivy config scan (report)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          # Under act there is no valid github.token, so setup-trivy's internal
+          # actions/checkout of aquasecurity/trivy cannot authenticate. Locally we
+          # use the trivy already baked into the runner image; on GitHub this is 'false'.
+          skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+          scan-type: config
+          scan-ref: .iac-scan-tmp
+          format: sarif
+          output: trivy-k8s.sarif
+          severity: ${{ needs.policy.outputs.severity }}
+          trivyignores: .trivyignore
+          exit-code: "0"
+
+      - name: Upload SARIF to Code Scanning
+        if: ${{ !env.ACT }}
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: trivy-k8s.sarif
+          category: trivy-kubernetes
+
+      - name: Trivy config scan (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          # Under act there is no valid github.token, so setup-trivy's internal
+          # actions/checkout of aquasecurity/trivy cannot authenticate. Locally we
+          # use the trivy already baked into the runner image; on GitHub this is 'false'.
+          skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+          scan-type: config
+          scan-ref: .iac-scan-tmp
+          format: table
+          severity: ${{ needs.policy.outputs.severity }}
+          trivyignores: .trivyignore
+          exit-code: ${{ needs.policy.outputs.exit_code }}
+
+      - name: Clean up
+        if: ${{ always() }}
+        shell: bash
+        run: rm -rf .iac-scan-tmp
+
+  dockerfiles:
+    name: Trivy (Dockerfiles)
+    runs-on: ubuntu-24.04
+    needs: policy
+    if: ${{ needs.policy.outputs.enabled == 'true' }}
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Trivy Dockerfile scan (report)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          # Under act there is no valid github.token, so setup-trivy's internal
+          # actions/checkout of aquasecurity/trivy cannot authenticate. Locally we
+          # use the trivy already baked into the runner image; on GitHub this is 'false'.
+          skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+          scan-type: config
+          scan-ref: services
+          format: sarif
+          output: trivy-dockerfile.sarif
+          severity: ${{ needs.policy.outputs.severity }}
+          trivyignores: .trivyignore
+          exit-code: "0"
+
+      - name: Upload SARIF to Code Scanning
+        if: ${{ !env.ACT }}
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: trivy-dockerfile.sarif
+          category: trivy-dockerfile
+
+      - name: Trivy Dockerfile scan (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          # Under act there is no valid github.token, so setup-trivy's internal
+          # actions/checkout of aquasecurity/trivy cannot authenticate. Locally we
+          # use the trivy already baked into the runner image; on GitHub this is 'false'.
+          skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+          scan-type: config
+          scan-ref: services
+          format: table
+          severity: ${{ needs.policy.outputs.severity }}
+          trivyignores: .trivyignore
+          exit-code: ${{ needs.policy.outputs.exit_code }}
