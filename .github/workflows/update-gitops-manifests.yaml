@@ -52,6 +52,13 @@ jobs:
           # utils:git:commit-push rebases onto origin/main before pushing, which
           # needs real history -- the default shallow clone breaks the rebase.
           fetch-depth: 0
+          # The main ruleset requires changes to go through a pull request. The
+          # default GITHUB_TOKEN pushes as github-actions[bot], which holds no
+          # repository role and so matches no bypass entry -- the push is rejected
+          # with GH013. checkout persists whatever token it is given and the later
+          # `git push` reuses it, so authenticating as the PAT owner (a Repository
+          # admin) is what satisfies the bypass list.
+          token: ${{ secrets.GHA_CAPSTONE_PERSONAL_ACCESS_TOKEN }}
 
       - name: Set up Task
         uses: ./.github/actions/setup-dependencies
