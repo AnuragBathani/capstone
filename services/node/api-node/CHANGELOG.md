@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/AnuragBathani/capstone/compare/services/node/api-node@1.2.0...services/node/api-node@1.2.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **api-node:** refresh service metadata ([f3a6f55](https://github.com/AnuragBathani/capstone/commit/f3a6f55da10aa20eb9f89b62cd1a29500f610d5c))
+
 ## [1.2.0](https://github.com/AnuragBathani/capstone/compare/services/node/api-node@1.1.0...services/node/api-node@1.2.0) (2026-08-19)
 
 

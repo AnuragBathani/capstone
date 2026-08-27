@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/AnuragBathani/capstone/compare/services/python/load-generator-python@0.3.0...services/python/load-generator-python@0.3.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **load-generator-python:** refresh service metadata ([a599c6d](https://github.com/AnuragBathani/capstone/commit/a599c6d4e6ccebe4040c7e713e816a9013e7f137))
+
 ## [0.3.0](https://github.com/AnuragBathani/capstone/compare/services/python/load-generator-python@0.2.0...services/python/load-generator-python@0.3.0) (2026-08-19)
 
 
