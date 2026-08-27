@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/AnuragBathani/capstone/compare/services/react/client-react@1.2.0...services/react/client-react@1.2.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **client-react:** refresh service metadata ([bf1836a](https://github.com/AnuragBathani/capstone/commit/bf1836a83540e2bc0d65a2bd4ee6104e7793ce7d))
+
 ## [1.2.0](https://github.com/AnuragBathani/capstone/compare/services/react/client-react@1.1.0...services/react/client-react@1.2.0) (2026-08-19)
 
 

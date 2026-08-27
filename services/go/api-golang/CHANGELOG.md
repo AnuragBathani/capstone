@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/AnuragBathani/capstone/compare/services/go/api-golang@1.4.0...services/go/api-golang@1.4.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **api-golang:** refresh service metadata ([fad26e9](https://github.com/AnuragBathani/capstone/commit/fad26e94d319f41b2a94d9a3e03bdaeaec671414))
+
 ## [1.4.0](https://github.com/AnuragBathani/capstone/compare/services/go/api-golang@1.3.1...services/go/api-golang@1.4.0) (2026-08-19)
 
 
