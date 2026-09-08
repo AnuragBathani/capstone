@@ -1,0 +1,45 @@
+# Defaults shared by every environment. Anything environment-specific lives in
+# values-<env>.yaml, which is also where CI rewrites the image tag.
+
+replicaCount: 1
+
+image:
+  repository: anuragbathani/devops-directive-docker-course-api-golang
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Runs as an ArgoCD PreSync hook so migrations complete BEFORE the new pods roll.
+# Under kluctl this was `kluctl.io/hook: pre-deploy`; ArgoCD ignores that
+# annotation entirely, so the equivalent has to be spelled in ArgoCD's own terms.
+dbMigrator:
+  enabled: true
+  image:
+    repository: anuragbathani/devops-directive-kubernetes-course-db-migrator
+    tag: latest
+
+service:
+  port: 8000
+
+containerPort: 8000
+
+# ⛔️ Plaintext for course purposes. Real clusters should source this from
+# External Secrets, Sealed Secrets, or an SOPS-encrypted file.
+database:
+  host: cnpg-minimal-rw.postgres.svc.cluster.local
+  port: 5432
+  name: postgres
+  user: postgres
+  password: foobarbaz
+
+ingress:
+  enabled: true
+  className: haproxy
+  host: gha-course.devopsdirective.com
+  path: /api/golang
+
+resources:
+  limits:
+    memory: 100Mi
+  requests:
+    memory: 100Mi
+    cpu: 50m

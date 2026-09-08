@@ -1,0 +1,24 @@
+# Cluster-wide objects that are not part of any service: the default StorageClass,
+# and anything else the platform needs before workloads sync.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-20"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/AnuragBathani/capstone.git
+    targetRevision: main
+    path: deploy/argocd/platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

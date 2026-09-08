@@ -13,7 +13,11 @@ This repository contains the capstone project for the [DevOps Directive GitHub A
 │   ├── utils/                  # release-please config, file-filters, etc.
 │   └── workflows/              # All workflow YAML files listed above
 ├── deploy/
-│   └── kubernetes/             # GitOps-style manifests
+│   ├── argocd/                 # ArgoCD Applications (app-of-apps)
+│   ├── charts/                 # Helm chart per service
+│   └── kubernetes/             # legacy Civo provisioning Taskfile
+├── infra/
+│   └── terraform/              # AWS VPC + EKS (see infra/terraform/README.md)
 ├── services/
 │   ├── go/api-golang
 │   ├── node/api-node
@@ -74,7 +78,11 @@ This repository contains the capstone project for the [DevOps Directive GitHub A
 
 10. **IaC Scan** – .github/workflows/iac-scan.yaml
 
-    Trivy misconfiguration scanning over the Kubernetes manifests and all five Dockerfiles.
+    Trivy misconfiguration scanning over the Kubernetes manifests, all five Dockerfiles, and the Terraform under `infra/terraform/`.
+
+11. **Terraform** – .github/workflows/terraform.yaml
+
+    `fmt` and `validate` on every PR with no credentials; `plan` against real state on PRs and pushes to main; `apply`/`destroy` only via manual dispatch behind the `production-infra` environment.
 
 ### How the Pieces Fit Together
 1.	PR or push to main → Run Tests.
@@ -87,7 +95,7 @@ This repository contains the capstone project for the [DevOps Directive GitHub A
 
 ## Security
 
-Five scanner categories run on every PR in **warn mode** — they report HIGH and CRITICAL findings that have a fix available, but **do not block delivery**:
+Six scanner categories run on every PR in **warn mode** — they report HIGH and CRITICAL findings that have a fix available, but **do not block delivery**:
 
 | Category | Tool | Gate |
 |---|---|---|
@@ -95,6 +103,7 @@ Five scanner categories run on every PR in **warn mode** — they report HIGH an
 | Secret | Gitleaks | `secret-scan.yaml` |
 | Dependency / SCA | Trivy `fs` + govulncheck | `dependency-scan.yaml` |
 | IaC / misconfiguration | Trivy `config` | `iac-scan.yaml` |
+| Terraform | Trivy `config` | `iac-scan.yaml` |
 | Container image | Trivy `image` | inside `build-push.yaml`, **before** the push |
 
 ### Policy as code
@@ -120,10 +129,10 @@ quietly did nothing".
   anything is published. In warn mode the push still proceeds; set `container_scan` to
   `enforcement: "block"` and the scan becomes a true gate that stops the push.
 
-- **kluctl templating breaks naive IaC scanning.** Four manifests aren't valid YAML
-  (`replicas: {{apiGolang.replicas}}`), so a scanner pointed at `deploy/` skips them
-  *silently* — including `api-golang`'s Deployment. `iac-scan.yaml` normalizes the
-  templating into a staging copy first and asserts everything parses before scanning.
+- **Templated manifests break naive IaC scanning.** A chart template
+  (`replicas: {{ .Values.replicaCount }}`) is not valid YAML, so a scanner pointed at
+  `deploy/` skips it *silently*. `iac-scan.yaml` runs `helm template` first and asserts
+  every rendered file parses — so it scans exactly what ArgoCD applies.
 
 Accepted findings live in `.trivyignore` and require a justification and an expiry date.
 Full details, and the deferred hardening backlog, are in

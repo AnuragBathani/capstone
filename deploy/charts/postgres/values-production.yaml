@@ -1,0 +1,3 @@
+cluster:
+  # One primary plus one replica.
+  instances: 2

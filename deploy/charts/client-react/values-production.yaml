@@ -1,0 +1,5 @@
+image:
+  tag: 1.2.1 # production_services/react/client-react
+
+ingress:
+  host: gha-course.devopsdirective.com

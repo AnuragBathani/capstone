@@ -1,0 +1,58 @@
+# Staging, in its own namespaces so it can coexist with production on a single
+# cluster. Disabled by default -- running both doubles the pod count on a two
+# node learning cluster. Rename to .yaml.disabled, or delete, if not wanted.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services-staging
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          # postgres first: the app Deployments crash-loop until the database
+          # answers, and api-golang's PreSync migration Job needs it reachable.
+          - name: postgres
+            namespace: postgres-staging
+            wave: "0"
+          - name: api-golang
+            namespace: demo-app-staging
+            wave: "1"
+          - name: api-node
+            namespace: demo-app-staging
+            wave: "1"
+          - name: client-react
+            namespace: demo-app-staging
+            wave: "1"
+          - name: load-generator
+            namespace: demo-app-staging
+            wave: "2"
+  template:
+    metadata:
+      name: '{{.name}}-staging'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AnuragBathani/capstone.git
+        targetRevision: main
+        path: 'deploy/charts/{{.name}}'
+        helm:
+          releaseName: '{{.name}}'
+          valueFiles:
+            - values.yaml
+            - values-staging.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

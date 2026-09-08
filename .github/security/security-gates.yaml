@@ -45,6 +45,11 @@ checks:
     enforcement: "warn"
     tool: Trivy (config)
     workflow: .github/workflows/iac-scan.yaml
+  terraform_scan:
+    enabled: true
+    enforcement: "warn"
+    tool: Trivy (config, terraform)
+    workflow: .github/workflows/iac-scan.yaml
   dast:
     enabled: false
     enforcement: "off"

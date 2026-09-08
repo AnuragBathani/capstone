@@ -1,0 +1,20 @@
+# gp3 is cheaper and faster than the gp2 class EKS ships as default, and this
+# marks it default so PVCs that omit storageClassName (cloudnative-pg's included)
+# land on it.
+#
+# Managed here rather than in Terraform: a kubernetes provider configured from
+# the cluster Terraform is creating breaks on destroy/re-plan, and destroy-rebuild
+# is the cost strategy for this cluster.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+    argocd.argoproj.io/sync-wave: "-20"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: gp3
+  encrypted: "true"

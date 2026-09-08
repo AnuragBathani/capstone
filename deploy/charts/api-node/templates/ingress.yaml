@@ -1,0 +1,26 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-node
+  labels:
+    {{- include "api-node.labels" . | nindent 4 }}
+  annotations:
+    # Single-quoted on purpose: Helm collapses \\ to \, and a lone \1 is an
+    # invalid escape in a YAML double-quoted scalar. Single quotes take the
+    # backslash literally, which is what HAProxy's replace-path expects.
+    haproxy.org/path-rewrite: '{{ .Values.ingress.path }}/?(.*) /\1'
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: api-node
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

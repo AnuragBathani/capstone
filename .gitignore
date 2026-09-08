@@ -12,3 +12,21 @@
 # Scanner scratch space and reports
 .iac-scan-tmp/
 *.sarif
+
+# Terraform
+# State holds cluster endpoints and, for some resources, plaintext credentials.
+# backend.hcl and *.tfvars may name buckets/accounts.
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+infra/terraform/backend.hcl

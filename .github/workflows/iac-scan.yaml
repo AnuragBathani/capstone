@@ -19,6 +19,9 @@ jobs:
       enforcement: ${{ steps.policy.outputs.enforcement }}
       severity: ${{ steps.policy.outputs.severity }}
       exit_code: ${{ steps.policy.outputs.exit_code }}
+      tf_enabled: ${{ steps.tf-policy.outputs.enabled }}
+      tf_severity: ${{ steps.tf-policy.outputs.severity }}
+      tf_exit_code: ${{ steps.tf-policy.outputs.exit_code }}
     steps:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -28,6 +31,12 @@ jobs:
         uses: ./.github/actions/security-policy
         with:
           check: iac_scan
+
+      - name: Read terraform policy
+        id: tf-policy
+        uses: ./.github/actions/security-policy
+        with:
+          check: terraform_scan
 
   kubernetes:
     name: Trivy (Kubernetes manifests)
@@ -41,45 +50,55 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
 
-      # Four manifests are not valid YAML because kluctl templating sits where a value
-      # starts (e.g. `replicas: {{apiGolang.replicas}}`). A scanner pointed straight at
-      # deploy/ skips them SILENTLY -- including api-golang's Deployment. Substituting
-      # `1` keeps both `replicas:` and `image: repo:TAG` type-valid so all of them parse.
+      # GitHub runners ship helm, but act images and self-hosted runners may not.
+      # Do not depend on undeclared runner state.
+      - name: Set up Helm
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+
+      # Charts are RENDERED before scanning, not pattern-substituted. Scanning the
+      # raw templates would mean scanning `replicas: {{ .Values.replicaCount }}`,
+      # which is not valid YAML and gets silently skipped -- the exact failure the
+      # old kluctl normalize step existed to work around. helm template produces
+      # precisely what ArgoCD applies, so this scans the real thing.
       #
-      # Staged inside the workspace, not /tmp: trivy-action is a Docker action and only
-      # mounts $GITHUB_WORKSPACE.
-      - name: Normalize kluctl templating
+      # Staged inside the workspace, not /tmp: trivy-action is a Docker action and
+      # only mounts $GITHUB_WORKSPACE.
+      - name: Render Helm charts
         shell: bash
         run: |
           set -euo pipefail
 
           rm -rf .iac-scan-tmp
-          mkdir -p .iac-scan-tmp
-          cp -r deploy .iac-scan-tmp/
+          mkdir -p .iac-scan-tmp/rendered
 
-          # Vendored upstream charts -- not our configuration to answer for.
-          rm -rf .iac-scan-tmp/deploy/kubernetes/kluctl/.helm-charts
+          # Plain manifests (ArgoCD Applications) need no rendering.
+          cp -r deploy/argocd .iac-scan-tmp/rendered/argocd
 
-          find .iac-scan-tmp -name '*.yaml' -o -name '*.yml' | while read -r f; do
-            sed -i -E 's/\{\{[^}]*\}\}/1/g' "$f"
+          rendered=0
+          for chart in deploy/charts/*/; do
+            name=$(basename "$chart")
+            helm template "$name" "$chart" \
+              -f "$chart/values.yaml" \
+              -f "$chart/values-production.yaml" \
+              > ".iac-scan-tmp/rendered/${name}.yaml"
+            rendered=$((rendered + 1))
           done
 
-          # GitHub-hosted runners ship PyYAML, but act images and self-hosted runners
-          # may not. Do not depend on undeclared runner state.
-          python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
+          echo "rendered $rendered charts"
 
+          python3 -c "import yaml" 2>/dev/null || pip install --quiet pyyaml
           python3 - <<'PY'
           import glob, sys, yaml
           bad = []
-          for f in glob.glob('.iac-scan-tmp/**/*.y*ml', recursive=True):
+          files = glob.glob('.iac-scan-tmp/rendered/**/*.y*ml', recursive=True)
+          for f in files:
               try:
                   list(yaml.safe_load_all(open(f)))
               except Exception as e:
                   bad.append((f, str(e).splitlines()[0]))
-          total = len(glob.glob('.iac-scan-tmp/**/*.y*ml', recursive=True))
-          print(f"normalized {total} manifests, {len(bad)} still unparseable")
+          print(f"validated {len(files)} rendered files, {len(bad)} unparseable")
           for f, e in bad:
-              print(f"::error file={f}::still unparseable after normalization: {e}")
+              print(f"::error file={f}::rendered output does not parse: {e}")
           sys.exit(1 if bad else 0)
           PY
 
@@ -91,7 +110,7 @@ jobs:
           # use the trivy already baked into the runner image; on GitHub this is 'false'.
           skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
           scan-type: config
-          scan-ref: .iac-scan-tmp
+          scan-ref: .iac-scan-tmp/rendered
           format: sarif
           output: trivy-k8s.sarif
           severity: ${{ needs.policy.outputs.severity }}
@@ -113,7 +132,7 @@ jobs:
           # use the trivy already baked into the runner image; on GitHub this is 'false'.
           skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
           scan-type: config
-          scan-ref: .iac-scan-tmp
+          scan-ref: .iac-scan-tmp/rendered
           format: table
           severity: ${{ needs.policy.outputs.severity }}
           trivyignores: .trivyignore
@@ -123,6 +142,50 @@ jobs:
         if: ${{ always() }}
         shell: bash
         run: rm -rf .iac-scan-tmp
+
+  terraform:
+    name: Trivy (Terraform)
+    runs-on: ubuntu-24.04
+    needs: policy
+    if: ${{ needs.policy.outputs.tf_enabled == 'true' }}
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      # Trivy's config scanner covers Terraform natively -- same engine and same
+      # policy as the Kubernetes and Dockerfile scans, so no new tool is needed.
+      - name: Trivy Terraform scan (report)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+          scan-type: config
+          scan-ref: infra/terraform
+          format: sarif
+          output: trivy-terraform.sarif
+          severity: ${{ needs.policy.outputs.tf_severity }}
+          trivyignores: .trivyignore
+          exit-code: "0"
+
+      - name: Upload SARIF to Code Scanning
+        if: ${{ !env.ACT }}
+        uses: github/codeql-action/upload-sarif@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28 # v4.37.8
+        with:
+          sarif_file: trivy-terraform.sarif
+          category: trivy-terraform
+
+      - name: Trivy Terraform scan (gate)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          skip-setup-trivy: ${{ env.ACT && 'true' || 'false' }}
+          scan-type: config
+          scan-ref: infra/terraform
+          format: table
+          severity: ${{ needs.policy.outputs.tf_severity }}
+          trivyignores: .trivyignore
+          exit-code: ${{ needs.policy.outputs.tf_exit_code }}
 
   dockerfiles:
     name: Trivy (Dockerfiles)

@@ -1,0 +1,57 @@
+# One ApplicationSet generates an Application per chart, rather than five nearly
+# identical files. Add a service by adding a list element.
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: services-production
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          # postgres first: the app Deployments crash-loop until the database
+          # answers, and api-golang's PreSync migration Job needs it reachable.
+          - name: postgres
+            namespace: postgres
+            wave: "0"
+          - name: api-golang
+            namespace: demo-app
+            wave: "1"
+          - name: api-node
+            namespace: demo-app
+            wave: "1"
+          - name: client-react
+            namespace: demo-app
+            wave: "1"
+          - name: load-generator
+            namespace: demo-app
+            wave: "2"
+  template:
+    metadata:
+      name: '{{.name}}-production'
+      annotations:
+        argocd.argoproj.io/sync-wave: '{{.wave}}'
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AnuragBathani/capstone.git
+        targetRevision: main
+        path: 'deploy/charts/{{.name}}'
+        helm:
+          releaseName: '{{.name}}'
+          valueFiles:
+            - values.yaml
+            - values-production.yaml
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{.namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

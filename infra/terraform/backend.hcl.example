@@ -1,0 +1,9 @@
+# Copy to backend.hcl and fill in the bucket the bootstrap module printed:
+#   terraform init -backend-config=backend.hcl
+#
+# backend.hcl itself is gitignored -- it names your state bucket.
+bucket         = "capstone-tfstate-CHANGEME"
+key            = "eks/production/terraform.tfstate"
+region         = "us-east-1"
+dynamodb_table = "capstone-tfstate-lock"
+encrypt        = true
