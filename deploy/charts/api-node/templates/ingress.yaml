@@ -13,7 +13,13 @@ metadata:
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   rules:
-    - host: {{ .Values.ingress.host | quote }}
+    # host is optional on purpose. Left empty the rule matches ANY host, which is
+    # what lets you reach the app on the load balancer's own DNS name before you
+    # own a domain. Set it once you have real DNS pointing at the LB.
+    -
+      {{- with .Values.ingress.host }}
+      host: {{ . | quote }}
+      {{- end }}
       http:
         paths:
           - path: {{ .Values.ingress.path }}

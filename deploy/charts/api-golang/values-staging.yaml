@@ -8,4 +8,4 @@ dbMigrator:
     tag: 1.4.1-0000-gf545550 # staging_services/other/api-golang-migrator
 
 ingress:
-  host: gha-course-staging.devopsdirective.com
+  host: ""

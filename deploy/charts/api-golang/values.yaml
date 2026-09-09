@@ -34,7 +34,7 @@ database:
 ingress:
   enabled: true
   className: haproxy
-  host: gha-course.devopsdirective.com
+  host: ""
   path: /api/golang
 
 resources:

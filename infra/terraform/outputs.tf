@@ -35,3 +35,18 @@ output "kubeconfig_command" {
   description = "Run this to point kubectl at the cluster."
   value       = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.region}"
 }
+
+output "argocd_port_forward" {
+  description = "Open the ArgoCD UI on http://localhost:8080."
+  value       = "kubectl -n argocd port-forward svc/argocd-server 8080:80"
+}
+
+output "argocd_initial_password" {
+  description = "Retrieve the generated admin password (not stored in state)."
+  value       = "kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d"
+}
+
+output "bootstrap_gitops" {
+  description = "Hand the cluster over to ArgoCD -- one manifest, everything else follows."
+  value       = "kubectl apply -f deploy/argocd/root.yaml"
+}

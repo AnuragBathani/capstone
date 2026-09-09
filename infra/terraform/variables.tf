@@ -152,3 +152,15 @@ variable "cluster_endpoint_public_access_cidrs" {
   type        = list(string)
   default     = ["0.0.0.0/0"]
 }
+
+variable "argocd_chart_version" {
+  description = "argo-cd Helm chart version. Pinned so a cluster rebuild is reproducible."
+  type        = string
+  default     = "7.7.11"
+}
+
+variable "lb_controller_chart_version" {
+  description = "aws-load-balancer-controller Helm chart version."
+  type        = string
+  default     = "1.10.1"
+}

@@ -8,4 +8,6 @@ dbMigrator:
     tag: 1.4.1 # production_services/other/api-golang-migrator
 
 ingress:
-  host: gha-course.devopsdirective.com
+  # Empty = match any host, so the app answers on the load balancer's DNS name.
+  # Replace with your own domain once DNS points at the LB.
+  host: ""

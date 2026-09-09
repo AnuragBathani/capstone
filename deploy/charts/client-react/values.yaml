@@ -19,7 +19,7 @@ backends:
 ingress:
   enabled: true
   className: haproxy
-  host: gha-course.devopsdirective.com
+  host: ""
   # Catch-all: everything not matched by a more specific /api/* Ingress.
   path: /
 
