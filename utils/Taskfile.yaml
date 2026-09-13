@@ -90,7 +90,7 @@ tasks:
           done
 
   update-image-tags-service:
-    desc: "Update image tags for kluctl config"
+    desc: "Update image tags in the Helm values ArgoCD renders"
     cmds:
       - task: update-image-tags
         vars:

@@ -1,0 +1,13 @@
+replicaCount: 3
+
+image:
+  tag: 1.4.1 # production_services/go/api-golang
+
+dbMigrator:
+  image:
+    tag: 1.4.1 # production_services/other/api-golang-migrator
+
+ingress:
+  # Empty = match any host, so the app answers on the load balancer's DNS name.
+  # Replace with your own domain once DNS points at the LB.
+  host: ""

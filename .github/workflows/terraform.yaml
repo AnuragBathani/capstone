@@ -1,0 +1,179 @@
+name: Terraform
+
+on:
+  pull_request:
+    paths:
+      - infra/terraform/**
+      - .github/workflows/terraform.yaml
+  push:
+    branches:
+      - main
+    paths:
+      - infra/terraform/**
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Terraform action to run
+        type: choice
+        required: true
+        default: plan
+        options:
+          - plan
+          - apply
+          - destroy
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.9.8"
+  WORKING_DIR: infra/terraform
+  TFVARS: env/production.tfvars
+
+jobs:
+  # Runs on every PR with no credentials at all -- formatting and syntax do not
+  # need AWS, and keeping this job unauthenticated means a fork PR still gets
+  # useful feedback without ever seeing a secret.
+  validate:
+    name: Format and validate
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform fmt -check -recursive -diff
+
+      # -backend=false skips backend init, so validate needs no bucket and no
+      # credentials. It still downloads providers and modules to typecheck.
+      - name: terraform init (no backend)
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform validate -no-color
+
+      - name: Summary
+        if: ${{ always() }}
+        run: |
+          {
+            echo "### Terraform validate"
+            echo ""
+            echo "- version: \`${TF_VERSION}\`"
+            echo "- directory: \`${WORKING_DIR}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    needs: validate
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.action == 'plan' }}
+    # act has no AWS credentials; skip rather than fail the local run.
+    steps:
+      - name: Checkout code
+        if: ${{ !env.ACT }}
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Configure AWS credentials
+        if: ${{ !env.ACT }}
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Set up Terraform
+        if: ${{ !env.ACT }}
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        if: ${{ !env.ACT }}
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=eks/production/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="dynamodb_table=capstone-tfstate-lock" \
+            -backend-config="encrypt=true"
+
+      - name: terraform plan
+        if: ${{ !env.ACT }}
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform plan -input=false -no-color -lock-timeout=5m \
+            -var-file="${TFVARS}" -out=tfplan | tee plan.txt
+
+      - name: Publish plan to summary
+        if: ${{ !env.ACT }}
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          {
+            echo "### Terraform plan"
+            echo ""
+            echo '```terraform'
+            # Step summaries cap at 1MiB; an EKS plan can exceed that.
+            tail -c 60000 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # Never automatic. Creating or destroying an EKS cluster is deliberate, and the
+  # environment gate is where a human approval can be required.
+  apply:
+    name: ${{ inputs.action }}
+    runs-on: ubuntu-24.04
+    needs: validate
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.action != 'plan' }}
+    environment: production-infra
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c # v6.2.4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform init
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          STATE_BUCKET: ${{ secrets.TF_STATE_BUCKET }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${STATE_BUCKET}" \
+            -backend-config="key=eks/production/terraform.tfstate" \
+            -backend-config="region=us-east-1" \
+            -backend-config="dynamodb_table=capstone-tfstate-lock" \
+            -backend-config="encrypt=true"
+
+      - name: terraform ${{ inputs.action }}
+        working-directory: ${{ env.WORKING_DIR }}
+        env:
+          TF_ACTION: ${{ inputs.action }}
+        run: |
+          if [ "$TF_ACTION" = "destroy" ]; then
+            terraform destroy -input=false -no-color -auto-approve -lock-timeout=5m -var-file="${TFVARS}"
+          else
+            terraform apply -input=false -no-color -auto-approve -lock-timeout=5m -var-file="${TFVARS}"
+          fi

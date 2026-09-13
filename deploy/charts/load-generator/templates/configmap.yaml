@@ -1,0 +1,14 @@
+{{- if .Values.config.enabled }}
+# 🚨 Currently unused, carried over from the kluctl layout for parity.
+# The Deployment sets API_URL and DELAY_MS directly as env vars; this ConfigMap
+# exists to demonstrate the envFrom alternative. Set config.enabled=false to drop it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: load-generator-config
+  labels:
+    app: load-generator-python
+data:
+  API_URL: {{ .Values.target.apiUrl | quote }}
+  DELAY_MS: {{ .Values.target.delayMs | quote }}
+{{- end }}

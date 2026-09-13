@@ -1,0 +1,5 @@
+image:
+  tag: 1.2.1-0000-gf545550 # staging_services/node/api-node
+
+ingress:
+  host: ""

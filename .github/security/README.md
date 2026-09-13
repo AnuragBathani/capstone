@@ -67,20 +67,19 @@ In the current `warn` posture the push proceeds regardless of findings. Setting
 `container_scan` to `enforcement: "block"` turns this into a real gate: a non-zero scan
 stops the `docker push` step from running.
 
-## IaC scanning and kluctl templating
+## IaC scanning and templated manifests
 
-Four manifests are not valid YAML, because kluctl templating sits where a value
-begins (e.g. `replicas: {{apiGolang.replicas}}`). A scanner pointed straight at
-`deploy/` **skips them silently** — including `api-golang`'s Deployment.
+Helm chart templates are not valid YAML on their own — `replicas: {{ .Values.replicaCount }}`
+has templating where a value belongs. A scanner pointed straight at `deploy/charts`
+parses nothing and reports a clean result, which is the most dangerous kind of pass.
 
-`iac-scan.yaml` therefore copies `deploy/` into a workspace-local staging directory,
-substitutes `{{ ... }}` with `1` (which keeps both `replicas:` and `image: repo:TAG`
-type-valid), asserts every manifest now parses, and scans that. Vendored upstream
-Helm charts are excluded — they are not our configuration to answer for.
+`iac-scan.yaml` therefore runs `helm template` for every chart with its production
+values, asserts every rendered file parses, and scans the rendered output. That means
+the scan sees precisely what ArgoCD applies — no substitution heuristics, no drift
+between what is scanned and what is deployed.
 
-*Higher-fidelity alternative, not currently implemented:* scan the output of
-`kluctl render -t staging --offline-kubernetes` — you would be scanning exactly what
-gets deployed, at the cost of a kluctl dependency in CI and Helm-chart noise.
+The Terraform under `infra/terraform/` is scanned by the same Trivy engine under its
+own `terraform_scan` policy check.
 
 ## Accepting a finding
 

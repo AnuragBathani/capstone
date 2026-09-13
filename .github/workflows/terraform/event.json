@@ -1,0 +1,13 @@
+{
+  "pull_request": {
+    "head": { "ref": "feature-branch" },
+    "base": { "ref": "main" }
+  },
+  "repository": {
+    "default_branch": "main",
+    "name": "capstone",
+    "full_name": "AnuragBathani/capstone",
+    "owner": { "login": "AnuragBathani" }
+  },
+  "sender": { "login": "AnuragBathani" }
+}

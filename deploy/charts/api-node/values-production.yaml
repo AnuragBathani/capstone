@@ -1,0 +1,7 @@
+image:
+  tag: 1.2.1 # production_services/node/api-node
+
+ingress:
+  # Empty = match any host, so the app answers on the load balancer's DNS name.
+  # Replace with your own domain once DNS points at the LB.
+  host: ""

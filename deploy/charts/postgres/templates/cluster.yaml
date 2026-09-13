@@ -1,0 +1,15 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.cluster.name }}
+  annotations:
+    # The operator's CRDs must exist before this resource can be applied. A later
+    # sync-wave lets the operator Application settle first.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  instances: {{ .Values.cluster.instances }}
+  enableSuperuserAccess: {{ .Values.cluster.enableSuperuserAccess }}
+  storage:
+    size: {{ .Values.cluster.storageSize }}
+  superuserSecret:
+    name: {{ .Values.superuser.secretName }}

@@ -1,0 +1,29 @@
+{{- if .Values.dbMigrator.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-migrator
+  annotations:
+    # PreSync is ArgoCD's equivalent of kluctl.io/hook: pre-deploy -- the sync
+    # blocks here until this Job succeeds, so migrations land before new pods run.
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "2"
+    # A Job's pod template is immutable, so re-applying an existing Job fails.
+    # Deleting the previous one first is what makes repeated syncs work at all.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: migrate
+          image: "{{ .Values.dbMigrator.image.repository }}:{{ .Values.dbMigrator.image.tag }}"
+          args:
+            - -path=/app/migrations
+            - -database=$(DATABASE_URL)?sslmode=disable
+            - up
+          envFrom:
+            - secretRef:
+                name: db-migrator-password
+{{- end }}

@@ -1,0 +1,37 @@
+# Ingress controller, replacing Traefik. Its Service is type LoadBalancer, so
+# this is what provisions the cloud load balancer.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: haproxy-ingress
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-10"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://haproxytech.github.io/helm-charts
+    chart: kubernetes-ingress
+    targetRevision: 1.44.4
+    helm:
+      releaseName: haproxy
+      values: |
+        controller:
+          kind: Deployment
+          replicaCount: 1
+          ingressClassResource:
+            name: haproxy
+            default: true
+          service:
+            type: LoadBalancer
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: haproxy-ingress
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

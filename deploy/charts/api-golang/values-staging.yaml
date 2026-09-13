@@ -1,0 +1,11 @@
+replicaCount: 1
+
+image:
+  tag: 1.4.1-0000-gf545550 # staging_services/go/api-golang
+
+dbMigrator:
+  image:
+    tag: 1.4.1-0000-gf545550 # staging_services/other/api-golang-migrator
+
+ingress:
+  host: ""

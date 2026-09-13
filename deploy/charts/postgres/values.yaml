@@ -1,0 +1,15 @@
+# The CloudNativePG OPERATOR is installed separately as its own ArgoCD
+# Application. This chart only declares the database Cluster it manages.
+
+cluster:
+  name: cnpg-minimal
+  instances: 1
+  storageSize: 1Gi
+  # Simplicity over least-privilege, as in the original course material.
+  enableSuperuserAccess: true
+
+# ⛔️ Plaintext for course purposes.
+superuser:
+  secretName: cnpg-minimal-superuser
+  username: postgres
+  password: foobarbaz

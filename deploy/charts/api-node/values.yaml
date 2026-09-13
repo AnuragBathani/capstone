@@ -1,0 +1,32 @@
+replicaCount: 1
+
+image:
+  repository: anuragbathani/devops-directive-docker-course-api-node
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  port: 3000
+
+containerPort: 3000
+
+# ⛔️ Plaintext for course purposes.
+database:
+  host: cnpg-minimal-rw.postgres.svc.cluster.local
+  port: 5432
+  name: postgres
+  user: postgres
+  password: foobarbaz
+
+ingress:
+  enabled: true
+  className: haproxy
+  host: ""
+  path: /api/node
+
+resources:
+  limits:
+    memory: 100Mi
+  requests:
+    memory: 100Mi
+    cpu: 50m

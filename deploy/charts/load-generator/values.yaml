@@ -1,0 +1,22 @@
+replicaCount: 1
+
+image:
+  repository: anuragbathani/devops-directive-kubernetes-course-load-generator-python
+  tag: latest
+  pullPolicy: Always
+
+target:
+  apiUrl: http://api-node.demo-app.svc.cluster.local:3000
+  delayMs: "500"
+
+# Unused by the Deployment, which sets the env vars directly. Kept so the chart
+# is a faithful port of the kluctl manifests; harmless to disable.
+config:
+  enabled: true
+
+resources:
+  limits:
+    memory: 50Mi
+  requests:
+    memory: 50Mi
+    cpu: 100m

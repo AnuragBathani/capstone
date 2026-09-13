@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator-python
+  labels:
+    app: load-generator-python
+    app.kubernetes.io/name: load-generator-python
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: load-generator-python
+  template:
+    metadata:
+      labels:
+        app: load-generator-python
+    spec:
+      containers:
+        - name: load-generator
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: API_URL
+              value: {{ .Values.target.apiUrl | quote }}
+            - name: DELAY_MS
+              value: {{ .Values.target.delayMs | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

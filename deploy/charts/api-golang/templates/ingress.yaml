@@ -1,0 +1,35 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-golang
+  labels:
+    {{- include "api-golang.labels" . | nindent 4 }}
+  annotations:
+    # Replaces the Traefik `stripPrefix` Middleware: the Go service expects to be
+    # called at /, not /api/golang/. Keeping the rewrite on the same object as the
+    # route removes the dangling-name failure the two-object Traefik setup had.
+    # Single-quoted on purpose: Helm collapses \\ to \, and a lone \1 is an
+    # invalid escape in a YAML double-quoted scalar. Single quotes take the
+    # backslash literally, which is what HAProxy's replace-path expects.
+    haproxy.org/path-rewrite: '{{ .Values.ingress.path }}/?(.*) /\1'
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    # host is optional on purpose. Left empty the rule matches ANY host, which is
+    # what lets you reach the app on the load balancer's own DNS name before you
+    # own a domain. Set it once you have real DNS pointing at the LB.
+    -
+      {{- with .Values.ingress.host }}
+      host: {{ . | quote }}
+      {{- end }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: api-golang
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}
