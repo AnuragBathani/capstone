@@ -26,6 +26,13 @@ spec:
             default: true
           service:
             type: LoadBalancer
+            # The AWS Load Balancer Controller provisions an INTERNAL NLB unless
+            # told otherwise -- the DNS name resolves but only from inside the VPC,
+            # which looks exactly like a broken load balancer from outside.
+            annotations:
+              service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
+              service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+              service.beta.kubernetes.io/aws-load-balancer-type: external
   destination:
     server: https://kubernetes.default.svc
     namespace: haproxy-ingress
