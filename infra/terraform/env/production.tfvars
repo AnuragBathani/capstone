@@ -10,6 +10,9 @@ cluster_version = "1.31"
 # 2 AZs is the EKS minimum. A third only buys resilience we do not need.
 az_count = 2
 
+# Avoids the 10.0.0.0/16 already used by the unrelated "Jerney" VPC in this account.
+vpc_cidr = "10.1.0.0/16"
+
 # t3.medium = 2 vCPU / 4GB. Two of them hold traefik + postgres + four services
 # with headroom. t3.small (2GB) is genuinely too tight once postgres is running.
 node_instance_types = ["t3.medium"]

@@ -86,9 +86,12 @@ resource "helm_release" "argocd" {
       service = {
         type = "ClusterIP"
       }
-      # TLS is terminated nowhere in this setup, and the server rejects plain
-      # HTTP unless told not to. Safe because access is via port-forward only.
-      extraArgs = ["--insecure"]
+      # --insecure: TLS is terminated at the load balancer (or nowhere), and the
+      #   server rejects plain HTTP unless told not to.
+      # --rootpath: ArgoCD is served under /argocd on the shared HAProxy load
+      #   balancer rather than getting an ELB of its own. It must generate its own
+      #   links under that prefix or the UI loads blank.
+      extraArgs = ["--insecure", "--rootpath=/argocd"]
     }
 
     # Single-replica everything: this is a two node learning cluster.

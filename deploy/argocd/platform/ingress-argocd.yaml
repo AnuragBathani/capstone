@@ -1,0 +1,32 @@
+# Exposes the ArgoCD UI on the SHARED HAProxy load balancer at /argocd, rather
+# than giving it a LoadBalancer Service of its own (~$18/month for a second ELB).
+#
+# No path-rewrite annotation here on purpose: ArgoCD runs with --rootpath=/argocd
+# and expects to receive the prefix. Stripping it would break every internal link.
+#
+# ⚠️ This makes the dashboard PUBLIC. ArgoCD holds cluster-admin, so anyone who
+# authenticates can deploy anything. Change the admin password immediately, and
+# narrow the allowlist below to your own IP.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: argocd-server
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+    # Restrict who can reach it. Replace with "<your.ip>/32" -- find yours with:
+    #   curl -s https://checkip.amazonaws.com
+    # Remove the annotation entirely to allow the whole internet.
+    haproxy.org/allow-list: "0.0.0.0/0"
+spec:
+  ingressClassName: haproxy
+  rules:
+    - http:
+        paths:
+          - path: /argocd
+            pathType: Prefix
+            backend:
+              service:
+                name: argocd-server
+                port:
+                  number: 80

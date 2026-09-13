@@ -28,9 +28,13 @@ variable "cluster_version" {
 }
 
 variable "vpc_cidr" {
-  description = "CIDR block for the VPC."
+  description = <<-DESC
+    CIDR block for the VPC. Deliberately NOT 10.0.0.0/16: this account already
+    holds an unrelated VPC on that range (Project=Jerney). Overlapping CIDRs are
+    legal but can never be peered, so the two are kept apart from the start.
+  DESC
   type        = string
-  default     = "10.0.0.0/16"
+  default     = "10.1.0.0/16"
 }
 
 variable "az_count" {
