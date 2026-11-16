@@ -1,0 +1,5 @@
+=== RUN   TestHealthEndpoint
+    healthcheck_test.go:18: expected status 200, received 503
+--- FAIL: TestHealthEndpoint (0.01s)
+FAIL
+FAIL    api-golang/test  0.024s

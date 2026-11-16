@@ -1,0 +1,9 @@
+============================= test session starts ==============================
+tests/test_example.py F                                                        [100%]
+=================================== FAILURES ===================================
+________________________________ test_addition _________________________________
+tests/test_example.py:3: in test_addition
+    assert 2 + 2 == 5
+E   assert 4 == 5
+FAILED tests/test_example.py::test_addition - assert 4 == 5
+=========================== short test summary info ============================

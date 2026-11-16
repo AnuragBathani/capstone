@@ -1,0 +1,6 @@
+{
+  "format": "go",
+  "error_substrings": ["undefined: UserResponse"],
+  "expected_file": "services/go/api-golang/main.go",
+  "min_errors": 1
+}

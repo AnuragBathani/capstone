@@ -1,0 +1,6 @@
+{
+  "format": "jest",
+  "error_substrings": ["renders the health status", "healthy"],
+  "expected_file": "test/example.test.js",
+  "min_errors": 1
+}

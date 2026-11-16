@@ -1,0 +1,5 @@
+go: downloading github.com/gin-gonic/gin v1.8.2
+# api-golang/test
+services/go/api-golang/main.go:42:9: undefined: UserResponse
+FAIL    api-golang/test [build failed]
+Error: Process completed with exit code 1.

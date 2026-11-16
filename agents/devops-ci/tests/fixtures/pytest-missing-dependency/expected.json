@@ -1,0 +1,6 @@
+{
+  "format": "pytest",
+  "error_substrings": ["ModuleNotFoundError", "requests"],
+  "expected_file": "tests/test_example.py",
+  "min_errors": 1
+}
