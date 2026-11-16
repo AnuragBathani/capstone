@@ -9,6 +9,11 @@ on:
             - .github/workflows/test.yaml
     pull_request:
     workflow_dispatch:
+      inputs:
+        simulate_agent_failure:
+          description: 'Emit a safe synthetic failure to validate the agent end to end'
+          type: boolean
+          default: false
 
 jobs:
     filter:
@@ -80,4 +85,18 @@ jobs:
               working-directory: ${{ matrix.service }}
               run: |
                 task test
-            
+
+    # GitHub-only validation path. Normal push/PR runs never execute this job.
+    # It changes no source and deliberately reddens only this manually dispatched run.
+    agent-validation-failure:
+        name: Agent Validation (services/go/api-golang)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.simulate_agent_failure }}
+        runs-on: ubuntu-24.04
+        steps:
+            - name: Emit synthetic Go compiler failure
+              run: |
+                echo 'Synthetic GitHub-only agent validation; no application code was changed.'
+                echo 'services/go/api-golang/main.go:42:9: undefined: AgentValidationType'
+                echo 'FAIL    api-golang/test [build failed]'
+                echo 'Error: Process completed with exit code 1.'
+                exit 1

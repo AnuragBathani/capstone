@@ -1,0 +1,5 @@
+{
+  "format": "go",
+  "error_substrings": ["TestHealthEndpoint"],
+  "min_errors": 1
+}

@@ -1,0 +1,8 @@
+FAIL test/example.test.js
+  ● Test suite failed to run
+
+    Cannot find module 'express' from 'src/index.js'
+
+      at Resolver.resolveModule (node_modules/jest-resolve/build/index.js:259:17)
+
+Test Suites: 1 failed, 1 total

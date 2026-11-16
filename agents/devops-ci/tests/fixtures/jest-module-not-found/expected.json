@@ -1,0 +1,6 @@
+{
+  "format": "jest",
+  "error_substrings": ["Cannot find module 'express'"],
+  "expected_file": "test/example.test.js",
+  "min_errors": 1
+}

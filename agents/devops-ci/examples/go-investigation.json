@@ -1,0 +1,20 @@
+{
+  "category": "application_code",
+  "service": "services/go/api-golang",
+  "summary": "The PR introduces UserResponse, but its definition or import is missing.",
+  "confidence": 0.93,
+  "evidence": [
+    {
+      "type": "compiler_error",
+      "excerpt": "services/go/api-golang/main.go:42:9: undefined: UserResponse",
+      "file": "services/go/api-golang/main.go",
+      "line": 42
+    }
+  ],
+  "suspected_files": [
+    "services/go/api-golang/main.go"
+  ],
+  "reproduction_command": "cd services/go/api-golang && task test",
+  "recommended_action": "Define or import UserResponse, or use the intended existing response type.",
+  "insufficient_evidence": false
+}

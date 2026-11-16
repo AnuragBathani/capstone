@@ -1,0 +1,11 @@
+FAIL test/example.test.js
+  ● renders the health status
+
+    expect(received).toBe(expected)
+
+    Expected: "healthy"
+    Received: "unhealthy"
+
+      at Object.<anonymous> (test/example.test.js:8:24)
+
+Test Suites: 1 failed, 1 total

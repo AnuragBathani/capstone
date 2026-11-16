@@ -1,0 +1,30 @@
+# Phase 0/1 policy: deterministic collection and read-only investigation only.
+# PR comments/issues are reports; repository content writes remain forbidden.
+investigation:
+  enabled: true
+  max_steps: 12
+  max_deepseek_calls: 6
+  max_tool_calls: 4
+  max_failed_jobs: 5
+  max_log_characters: 200000
+  max_log_excerpt_characters: 4000
+  max_source_characters: 30000
+  timeout_minutes: 10
+  artifact_retention_days: 7
+
+permissions:
+  repository_write: false
+  execute_pull_request_code: false
+  create_pull_requests: false
+  automatic_merge: false
+
+allowed_tools:
+  - get_workflow_metadata
+  - get_failed_jobs
+  - get_job_logs
+  - get_pull_request_diff
+  - read_repository_file
+  - get_recent_related_failures
+
+allowed_workflows:
+  - Run Tests

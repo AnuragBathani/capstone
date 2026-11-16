@@ -84,6 +84,10 @@ This repository contains the capstone project for the [DevOps Directive GitHub A
 
     `fmt` and `validate` on every PR with no credentials; `plan` against real state on PRs and pushes to main; `apply`/`destroy` only via manual dispatch behind the `production-infra` environment.
 
+12. **Agent Failure Investigator** – .github/workflows/agent-investigate.yaml
+
+    Starts after `Run Tests` completes with failure/timeout, retrieves only failed-job logs through the GitHub API, redacts and parses evidence, and uses bounded DeepSeek tool calls for ambiguous failures. Publishes one fingerprint-deduplicated PR comment (or an issue for no-PR failures), with deterministic fallback reports and sanitized artifacts. It never executes failed-PR code or modifies source. Supports manual investigation by run ID. For GitHub-only validation, manually dispatch `Run Tests` with `simulate_agent_failure: true`. See `agents/devops-ci/README.md`.
+
 ### How the Pieces Fit Together
 1.	PR or push to main → Run Tests.
 2.	If main changes or a tag is pushed → Build & Push Container Images builds and publishes images, then triggers…

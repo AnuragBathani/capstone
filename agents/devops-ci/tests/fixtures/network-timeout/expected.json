@@ -1,0 +1,5 @@
+{
+  "format": "generic",
+  "error_substrings": ["network timeout"],
+  "min_errors": 1
+}
